@@ -1,0 +1,15 @@
+flask==3.0.0
+flask-cors==4.0.0
+PyJWT==2.8.0
+Werkzeug==3.0.1
+Pillow==10.2.0
+numpy==1.26.4
+requests==2.31.0
+fpdf==1.7.2
+python-docx==1.1.0
+
+# ─── Install these separately (heavy) ───────────────────
+# pip install face-recognition         (requires cmake & dlib)
+# pip install deepface                  (TensorFlow based)
+# pip install opencv-python             (for camera capture)
+# pip install tf-keras                  (for deepface)

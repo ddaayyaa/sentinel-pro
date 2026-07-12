@@ -1,0 +1,122 @@
+name: sentinel_pro
+description: SENTINEL PRO - Advanced AI Security System
+publish_to: 'none'
+version: 2.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  provider: ^6.1.1
+  riverpod: ^2.4.9
+  flutter_riverpod: ^2.4.9
+  
+  # HTTP & API
+  dio: ^5.4.0
+  http: ^1.2.0
+  web_socket_channel: ^2.4.0
+  
+  # Camera & Image
+  camera: ^0.10.5+9
+  image_picker: ^1.0.7
+  image_cropper: ^5.0.1
+  flutter_image_compress: ^2.1.0
+  
+  # Storage & DB
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.2
+  path_provider: ^2.1.2
+  path: ^1.9.0
+  
+  # UI & Animation
+  flutter_animate: ^4.5.0
+  lottie: ^3.1.0
+  shimmer: ^3.0.0
+  animations: ^2.0.11
+  flutter_staggered_animations: ^1.1.1
+  animated_text_kit: ^4.2.2
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  
+  # Charts & Graphs
+  fl_chart: ^0.67.0
+  syncfusion_flutter_charts: ^24.1.41
+  
+  # File Handling
+  file_picker: ^8.0.0+1
+  open_file: ^3.3.2
+  flutter_pdfview: ^1.3.2
+  csv: ^6.0.0
+  
+  # Utils
+  intl: ^0.19.0
+  uuid: ^4.3.3
+  permission_handler: ^11.3.0
+  connectivity_plus: ^6.0.3
+  device_info_plus: ^10.1.0
+  package_info_plus: ^8.0.0
+  local_auth: ^2.2.0
+  
+  # Notifications
+  flutter_local_notifications: ^17.1.2
+  
+  # QR Code
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.1.0
+  
+  # UI Components
+  flutter_slidable: ^3.1.0
+  pull_to_refresh: ^2.0.0
+  infinite_scroll_pagination: ^4.0.0
+  data_table_2: ^2.5.14
+  timeline_tile: ^2.0.0
+  step_progress_indicator: ^1.0.2
+  percent_indicator: ^4.2.3
+  badges: ^3.1.2
+  
+  # Maps & Location  
+  geolocator: ^11.0.0
+  
+  # Biometrics
+  flutter_face_api: ^3.0.0
+  
+  # PDF Export
+  pdf: ^3.10.8
+  printing: ^5.12.0
+  
+  # Excel Export
+  excel: ^4.0.3
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.8
+
+flutter:
+  uses-material-design: true
+  # assets:
+  #   - assets/images/
+  #   - assets/icons/
+  # fonts:
+  #   - family: Rajdhani
+  #     fonts:
+  #       - asset: assets/fonts/Rajdhani-Regular.ttf
+  #       - asset: assets/fonts/Rajdhani-Bold.ttf
+  #         weight: 700
+  #       - asset: assets/fonts/Rajdhani-SemiBold.ttf
+  #         weight: 600
+  #   - family: Orbitron
+  #     fonts:
+  #       - asset: assets/fonts/Orbitron-Regular.ttf
+  #       - asset: assets/fonts/Orbitron-Bold.ttf
+  #         weight: 700

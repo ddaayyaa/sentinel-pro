@@ -1,0 +1,78 @@
+def localProperties = [:]
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.eachLine { line ->
+        if (!line.startsWith('#') && line.contains('=')) {
+            def parts = line.split('=', 2)
+            localProperties[parts[0].trim()] = parts[1].trim()
+        }
+    }
+}
+
+def flutterRoot = localProperties['flutter.sdk']
+assert flutterRoot != null : "Flutter SDK not found. Define location with flutter.sdk in the local.properties file."
+
+def flutterVersionCode = localProperties['flutter.versionCode'] ?: '1'
+def flutterVersionName = localProperties['flutter.versionName'] ?: '1.0'
+
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+android {
+    namespace "com.sentinelpro.app"
+    compileSdk 35
+    ndkVersion "26.1.10909125"
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    lint {
+        disable 'InvalidPackage'
+        checkReleaseBuilds false
+    }
+
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+
+    defaultConfig {
+        applicationId "com.sentinelpro.app"
+        minSdk 24
+        targetSdk 35
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            debuggable true
+        }
+    }
+}
+
+flutter { source '../..' }
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+}
