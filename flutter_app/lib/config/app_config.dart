@@ -4,7 +4,7 @@ class AppConfig {
   /// `flutter run --dart-define=API_BASE_URL=http://your-ip:5000`
   static const String defaultApiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.225.200.156:5000',
+    defaultValue: 'http://10.232.189.156:5000',
   );
 
   /// OpenAI API Key for the AI Service.

@@ -21,7 +21,7 @@ pip install -r requirements.txt --quiet
 echo [3/3] Starting Flask server...
 echo.
 echo  Server: http://localhost:5000
-echo  Admin:  admin / admin123
+echo  Admin:  ad--- / ad-----
 echo.
 python app.py
 

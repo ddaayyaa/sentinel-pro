@@ -5,7 +5,7 @@ import os
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-db_path = 'sentinel.db'
+db_path = r'C:\Users\ydaya\Downloads\sentinel_pro_shared.db'
 if not os.path.exists(db_path):
     print(f"Error: {db_path} not found")
     exit(1)

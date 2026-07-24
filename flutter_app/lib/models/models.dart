@@ -1,8 +1,17 @@
 import 'dart:convert';
 
+int? _toInt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  return int.tryParse(v.toString());
+}
+
+int _toIntDefault(dynamic v, int d) => _toInt(v) ?? d;
+
 // --- User Model ---
 class User {
-  final int? id;
+  final String? id;
   final String username;
   final String email;
   final String role;
@@ -31,7 +40,7 @@ class User {
   });
 
   factory User.fromJson(Map<dynamic, dynamic> json) => User(
-        id: json['id'],
+        id: json['id']?.toString(),
         username: json['username'] ?? '',
         email: json['email'] ?? '',
         role: json['role'] ?? 'user',
@@ -90,14 +99,14 @@ class FaceRecord {
   });
 
   factory FaceRecord.fromJson(Map<dynamic, dynamic> json) => FaceRecord(
-        id: json['id'],
+        id: _toInt(json['id']),
         personName: json['person_name'] ?? 'Unknown',
         personId: json['person_id'] ?? '',
         department: json['department'],
         accessLevel: json['access_level'] ?? 'standard',
         status: json['status'] ?? 'active',
-        encodingCount: json['encoding_count'] ?? 0,
-        matchCount: json['match_count'] ?? 0,
+        encodingCount: _toIntDefault(json['encoding_count'], 0),
+        matchCount: _toIntDefault(json['match_count'], 0),
         registeredAt: DateTime.tryParse(json['registered_at']?.toString() ?? '') ?? DateTime.now(),
         lastSeen: DateTime.tryParse(json['last_seen']?.toString() ?? ''),
         imagePaths: json['image_paths'] is List ? (json['image_paths'] as List).cast<String>() : [],
@@ -139,7 +148,7 @@ class FaceRecognitionResult {
 
 // --- Entry Log Model ---
 class EntryLog {
-  final int? id;
+  final String? id;
   final String personName;
   final String personId;
   final String status; 
@@ -168,7 +177,7 @@ class EntryLog {
   });
 
   factory EntryLog.fromJson(Map<dynamic, dynamic> json) => EntryLog(
-        id: json['id'],
+        id: json['id']?.toString(),
         personName: json['person_name'] ?? 'Unknown',
         personId: json['person_id'] ?? '',
         status: json['status'] ?? 'unknown',
@@ -200,7 +209,7 @@ class EntryLog {
 
 // --- Security Alert Model ---
 class SecurityAlert {
-  final int id;
+  final String id;
   final String type;
   final String severity;
   final String message;
@@ -227,7 +236,7 @@ class SecurityAlert {
   });
 
   factory SecurityAlert.fromJson(Map<dynamic, dynamic> json) => SecurityAlert(
-        id: json['id'] ?? 0,
+        id: json['id']?.toString() ?? '',
         type: json['type'] ?? 'info',
         severity: json['severity'] ?? 'medium',
         message: json['message'] ?? '',
@@ -265,8 +274,8 @@ class TrainingJob {
         jobId: json['job_id'] ?? '',
         status: json['status'] ?? 'pending',
         progress: (json['progress'] ?? 0.0).toDouble(),
-        totalImages: json['total_images'] ?? 0,
-        processedImages: json['processed_images'] ?? 0,
+        totalImages: _toIntDefault(json['total_images'], 0),
+        processedImages: _toIntDefault(json['processed_images'], 0),
         currentFile: json['current_file'],
         metrics: json['metrics'] is String ? jsonDecode(json['metrics']) : (json['metrics'] ?? {}),
       );
@@ -293,12 +302,12 @@ class CameraDevice {
   });
 
   factory CameraDevice.fromJson(Map<dynamic, dynamic> json) => CameraDevice(
-        id: json['id'] ?? '',
+        id: json['id']?.toString() ?? '',
         name: json['name'] ?? '',
         location: json['location'] ?? '',
         status: json['status'] ?? 'offline',
         streamUrl: json['stream_url'] ?? '',
-        detectionCount: json['detection_count'] ?? 0,
+        detectionCount: _toIntDefault(json['detection_count'], 0),
         lastActivity: DateTime.tryParse(json['last_activity']?.toString() ?? ''),
       );
 }
@@ -324,7 +333,7 @@ class AppNotification {
   });
 
   factory AppNotification.fromJson(Map<dynamic, dynamic> json) => AppNotification(
-        id: json['id'],
+        id: _toInt(json['id']),
         title: json['title'] ?? '',
         body: json['body'] ?? '',
         type: json['type'] ?? 'info',
@@ -361,12 +370,12 @@ class DashboardStats {
   });
 
   factory DashboardStats.fromJson(Map<dynamic, dynamic> json) => DashboardStats(
-        totalFaces: json['total_faces'] ?? 0,
-        todayEntries: json['today_entries'] ?? 0,
-        unauthorizedToday: json['unauthorized_today'] ?? 0,
-        activeAlerts: json['active_alerts'] ?? 0,
-        pendingApprovals: json['pending_approvals'] ?? 0,
-        onlineCameras: json['online_cameras'] ?? 0,
+        totalFaces: _toIntDefault(json['total_faces'], 0),
+        todayEntries: _toIntDefault(json['today_entries'], 0),
+        unauthorizedToday: _toIntDefault(json['unauthorized_today'], 0),
+        activeAlerts: _toIntDefault(json['active_alerts'], 0),
+        pendingApprovals: _toIntDefault(json['pending_approvals'], 0),
+        onlineCameras: _toIntDefault(json['online_cameras'], 0),
         recognitionAccuracy: (json['recognition_accuracy'] ?? 0.0).toDouble(),
         hourlyData: (json['hourly_data'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList(),
         weeklyData: (json['weekly_data'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList(),

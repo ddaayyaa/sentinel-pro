@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ class LogDetailsScreen extends StatelessWidget {
     final EntryLog log = ModalRoute.of(context)!.settings.arguments as EntryLog;
     final dateStr = DateFormat('MMMM dd, yyyy').format(log.timestamp);
     final timeStr = DateFormat('hh:mm:ss a').format(log.timestamp);
+    final api = context.read<ApiService>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFF),
@@ -28,7 +30,7 @@ class LogDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Captured Frame
+            // Captured Frame (Forensic Sketch)
             Container(
               height: 280,
               width: double.infinity,
@@ -36,11 +38,17 @@ class LogDetailsScreen extends StatelessWidget {
                 color: const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xFFE5E7EB)),
-                image: log.imagePath != null
-                    ? DecorationImage(image: NetworkImage('${context.read<ApiService>().baseUrl}/${log.imagePath}'), fit: BoxFit.contain)
-                    : null,
               ),
-              child: log.imagePath == null ? const Icon(Icons.videocam_off_rounded, size: 64, color: Colors.grey) : null,
+              clipBehavior: Clip.antiAlias,
+              child: log.imagePath != null
+                  ? CachedNetworkImage(
+                      imageUrl: api.getImageUrl(log.imagePath),
+                      httpHeaders: api.authHeader,
+                      fit: BoxFit.contain,
+                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => const Center(child: Icon(Icons.videocam_off_rounded, size: 64, color: Colors.grey)),
+                    )
+                  : const Center(child: Icon(Icons.videocam_off_rounded, size: 64, color: Colors.grey)),
             ),
             const SizedBox(height: 32),
             const Text('Security Context', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

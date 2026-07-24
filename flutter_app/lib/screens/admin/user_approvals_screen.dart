@@ -113,7 +113,11 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => provider.rejectUser(user.id!, 'Access Denied'),
+                    onPressed: () {
+                      if (user.id != null) {
+                        provider.rejectUser(user.id!, 'Access Denied');
+                      }
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
                       side: BorderSide(color: Colors.red.withOpacity(0.5)),
@@ -126,7 +130,11 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () => provider.approveUser(user.id!),
+                    onPressed: () {
+                      if (user.id != null) {
+                        provider.approveUser(user.id!);
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
                       foregroundColor: Colors.white,

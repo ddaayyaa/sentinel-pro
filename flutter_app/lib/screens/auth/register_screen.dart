@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
@@ -28,6 +29,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (name.isEmpty || email.isEmpty || pass.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in required fields (Name, Email, Phone, Pass)')),
+      );
+      return;
+    }
+
+    // Email validation
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Give correct email format')),
+      );
+      return;
+    }
+
+    // Phone validation
+    final phoneRegex = RegExp(r'^\d{10}$');
+    if (!phoneRegex.hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Give correct phone format')),
       );
       return;
     }
@@ -187,6 +206,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),

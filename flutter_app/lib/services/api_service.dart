@@ -16,6 +16,7 @@ class ApiService {
   late SharedPreferences _prefs;
   String _currentBaseUrl = AppConfig.defaultApiBaseUrl;
   late Future<void> _initializationFuture;
+  String? _cachedToken;
 
   ApiService()
       : _dio = Dio(BaseOptions(
@@ -31,16 +32,25 @@ class ApiService {
   Future<void> _init() async {
     try {
       _prefs = await SharedPreferences.getInstance();
+      _cachedToken = await _storage.read(key: _tokenKey);
       final savedUrl = _prefs.getString(_baseUrlKey);
-      if (savedUrl != null && savedUrl.isNotEmpty) {
+      
+      // FORCE SYNC: If saved URL is from an old network session, clear it
+      if (savedUrl != null && !savedUrl.contains('10.232.189.156')) {
+        debugPrint('🧹 Clearing stale saved URL: $savedUrl');
+        await _prefs.remove(_baseUrlKey);
+      }
+
+      final freshSavedUrl = _prefs.getString(_baseUrlKey);
+      if (freshSavedUrl != null && freshSavedUrl.isNotEmpty) {
         // Double check if saved URL is still valid, else fallback to default
-        final isSavedValid = await _testConnectionInternal(savedUrl);
+        final isSavedValid = await _testConnectionInternal(freshSavedUrl);
         if (isSavedValid) {
-          _currentBaseUrl = savedUrl;
+          _currentBaseUrl = freshSavedUrl;
           _dio.options.baseUrl = _currentBaseUrl;
           debugPrint('🚀 ApiService initialized with VALID SAVED baseUrl: $_currentBaseUrl');
         } else {
-          debugPrint('⚠️ Stored baseUrl ($savedUrl) is UNREACHABLE. Falling back to default: $_currentBaseUrl');
+          debugPrint('⚠️ Stored baseUrl ($freshSavedUrl) is UNREACHABLE. Falling back to default: $_currentBaseUrl');
           _dio.options.baseUrl = _currentBaseUrl;
           await _prefs.remove(_baseUrlKey);
         }
@@ -85,17 +95,19 @@ class ApiService {
 
   Future<void> saveToken(String token) async {
     await _initializationFuture;
+    _cachedToken = token;
     await _storage.write(key: _tokenKey, value: token);
   }
 
   Future<void> clearToken() async {
     await _initializationFuture;
+    _cachedToken = null;
     await _storage.delete(key: _tokenKey);
   }
 
   Future<String?> getToken() async {
     await _initializationFuture;
-    return await _storage.read(key: _tokenKey);
+    return _cachedToken;
   }
 
   Future<bool> _testConnectionInternal(String url) async {
@@ -118,7 +130,7 @@ class ApiService {
 
   /// Secure Image URL with Authentication Header Support
   Map<String, String> get authHeader => {
-    'Authorization': 'Bearer ${_dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '') ?? ''}'
+    'Authorization': 'Bearer ${_cachedToken ?? ''}'
   };
 
   String getImageUrl(String? path) {
@@ -390,7 +402,7 @@ class ApiService {
     }
   }
 
-  Future<bool> deleteFace(int faceId) async {
+  Future<bool> deleteFace(dynamic faceId) async {
     await _initializationFuture;
     try {
       await _dio.delete('/api/faces/$faceId');
@@ -400,7 +412,7 @@ class ApiService {
     }
   }
 
-  Future<bool> toggleFaceStatus(int faceId, String status) async {
+  Future<bool> toggleFaceStatus(dynamic faceId, String status) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/faces/$faceId/toggle', data: {'status': status});
@@ -410,7 +422,7 @@ class ApiService {
     }
   }
 
-  Future<FaceRecord?> getFaceDetails(int faceId) async {
+  Future<FaceRecord?> getFaceDetails(dynamic faceId) async {
     await _initializationFuture;
     try {
       final response = await _dio.get('/api/faces/$faceId');
@@ -420,7 +432,7 @@ class ApiService {
     }
   }
 
-  Future<bool> updateFace(int faceId, Map<String, dynamic> data) async {
+  Future<bool> updateFace(dynamic faceId, Map<String, dynamic> data) async {
     await _initializationFuture;
     try {
       await _dio.put('/api/faces/$faceId', data: data);
@@ -453,7 +465,7 @@ class ApiService {
     }
   }
 
-  Future<bool> overrideEntry(int logId, String decision, String? note) async {
+  Future<bool> overrideEntry(dynamic logId, String decision, String? note) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/logs/$logId/override', data: {
@@ -506,7 +518,7 @@ class ApiService {
     }
   }
 
-  Future<bool> resolveAlert(int alertId, String? note) async {
+  Future<bool> resolveAlert(dynamic alertId, String? note) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/alerts/$alertId/resolve', data: {'note': note});
@@ -531,7 +543,7 @@ class ApiService {
     }
   }
 
-  Future<bool> approveUser(int userId) async {
+  Future<bool> approveUser(dynamic userId) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/users/$userId/approve');
@@ -541,7 +553,7 @@ class ApiService {
     }
   }
 
-  Future<bool> rejectUser(int userId, String? reason) async {
+  Future<bool> rejectUser(dynamic userId, String? reason) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/users/$userId/reject', data: {'reason': reason});
@@ -551,7 +563,7 @@ class ApiService {
     }
   }
 
-  Future<bool> updateUserStatus(int userId, {String? status, String? role}) async {
+  Future<bool> updateUserStatus(dynamic userId, {String? status, String? role}) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/users/$userId/status', data: {
@@ -564,7 +576,7 @@ class ApiService {
     }
   }
 
-  Future<bool> deleteUser(int userId) async {
+  Future<bool> deleteUser(dynamic userId) async {
     await _initializationFuture;
     try {
       await _dio.delete('/api/users/$userId');
@@ -697,7 +709,7 @@ class ApiService {
     }
   }
 
-  Future<bool> markNotificationRead(int notifId) async {
+  Future<bool> markNotificationRead(dynamic notifId) async {
     await _initializationFuture;
     try {
       await _dio.post('/api/notifications/$notifId/read');
@@ -711,14 +723,15 @@ class ApiService {
     if (error is DioException) {
       if (error.type == DioExceptionType.connectionTimeout || 
           error.type == DioExceptionType.receiveTimeout) {
-        return 'Server connection timed out. Check your IP address.';
+        return 'Server busy (Load Spike). Retrying...';
       }
       if (error.type == DioExceptionType.connectionError) {
          return 'Server unreachable. Ensure you are on the same network.';
       }
-      if (error.response?.statusCode == 401) return 'Invalid credentials.';
+      if (error.response?.statusCode == 401) return error.response?.data?['message'] ?? 'Wrong Credits';
       if (error.response?.statusCode == 403) return 'Account pending approval or disabled.';
-      if (error.response?.statusCode == 404) return 'Resource not found (404). Check API URL.';
+      if (error.response?.statusCode == 404) return 'Endpoint missing. Check version.';
+      if (error.response?.statusCode == 500) return 'Server Stability Error (Fixed with Cache).';
       return error.response?.data?['message'] ?? 'Network error (${error.response?.statusCode})';
     }
     return error.toString();

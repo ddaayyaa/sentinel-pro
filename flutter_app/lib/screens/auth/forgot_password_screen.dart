@@ -1,8 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 
-class ForgotPasswordScreen extends StatelessWidget {
+class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final TextEditingController _emailController = TextEditingController();
+
+  void _handleReset() {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email')),
+      );
+      return;
+    }
+
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Give correct email format')),
+      );
+      return;
+    }
+
+    // Actual reset logic would go here
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Reset link sent successfully')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +87,8 @@ class ForgotPasswordScreen extends StatelessWidget {
               const SizedBox(height: 8),
               // Email Field
               TextField(
+                controller: _emailController,
+                inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
                 decoration: InputDecoration(
                   hintText: 'Enter your email',
                   hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
@@ -83,7 +116,7 @@ class ForgotPasswordScreen extends StatelessWidget {
                   ),
                 ),
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: _handleReset,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,

@@ -199,15 +199,16 @@ except ImportError:
     PIL_AVAILABLE = False
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # ─── Config ───────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SHARED_DB_DIR = r'C:\Users\ydaya\Downloads'
 app.config.update(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'sentinel_pro_secret_2024_secure'),
     JWT_SECRET=os.environ.get('JWT_SECRET', 'sentinel_jwt_secret_2024'),
     JWT_EXPIRY_HOURS=24,
-    DATABASE=os.path.join(BASE_DIR, 'sentinel.db'),
+    DATABASE=os.path.join(SHARED_DB_DIR, 'sentinel_pro_shared.db'),
     UPLOAD_FOLDER=os.path.join(BASE_DIR, 'uploads'),
     FACES_FOLDER=os.path.join(BASE_DIR, 'faces'),
     LOGS_FOLDER=os.path.join(BASE_DIR, 'logs'),
@@ -247,119 +248,161 @@ def init_db():
 
         cur.executescript('''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id TEXT PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user',
             status TEXT DEFAULT 'pending',
+            approved INTEGER DEFAULT 0,
             full_name TEXT,
             phone TEXT,
             department TEXT,
             avatar_url TEXT,
+            avatar_color TEXT,
             created_at TEXT DEFAULT (datetime('now', 'localtime')),
             last_login TEXT,
-            is_online INTEGER DEFAULT 0
+            is_online INTEGER DEFAULT 0,
+            approved_at TEXT,
+            approved_by TEXT,
+            face_registered INTEGER DEFAULT 0,
+            face_count INTEGER DEFAULT 0
         );
-
         CREATE TABLE IF NOT EXISTS face_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_name TEXT NOT NULL,
             person_id TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
             department TEXT,
-            access_level TEXT DEFAULT 'standard',
+            phone TEXT,
             status TEXT DEFAULT 'active',
-            encoding_count INTEGER DEFAULT 0,
-            match_count INTEGER DEFAULT 0,
-            registered_at TEXT DEFAULT (datetime('now', 'localtime')),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             last_seen TEXT,
-            image_paths TEXT DEFAULT '[]'
+            encodings_count INTEGER DEFAULT 0
         );
-
         CREATE TABLE IF NOT EXISTS entry_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            person_name TEXT NOT NULL,
-            person_id TEXT DEFAULT '',
-            status TEXT NOT NULL,
-            confidence REAL DEFAULT 0.0,
-            image_path TEXT,
-            camera_id TEXT DEFAULT 'CAM-01',
-            entry_point TEXT DEFAULT 'Main Entrance',
-            timestamp TEXT DEFAULT (datetime('now', 'localtime')),
-            admin_note TEXT,
-            alert_triggered INTEGER DEFAULT 0,
-            overridden_by TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS security_alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL,
-            severity TEXT DEFAULT 'medium',
-            message TEXT NOT NULL,
+            id TEXT PRIMARY KEY,
             person_name TEXT,
+            person_id TEXT,
+            status TEXT,
+            confidence REAL,
             image_path TEXT,
             camera_id TEXT,
-            timestamp TEXT DEFAULT (datetime('now', 'localtime')),
+            gate TEXT,
+            entry_point TEXT,
+            timestamp TEXT,
+            admin_note TEXT,
+            notes TEXT,
+            alert_triggered INTEGER DEFAULT 0,
+            admin_override INTEGER DEFAULT 0,
+            overridden_by TEXT,
+            override_by TEXT,
+            detection_method TEXT
+        );
+        CREATE TABLE IF NOT EXISTS registered_faces (
+            id TEXT PRIMARY KEY,
+            person_id TEXT NOT NULL,
+            person_name TEXT NOT NULL,
+            image_path TEXT,
+            encoding_path TEXT,
+            registered_by TEXT,
+            registered_at TEXT,
+            is_authorized INTEGER DEFAULT 1,
+            category TEXT DEFAULT 'staff',
+            notes TEXT
+        );
+        CREATE TABLE IF NOT EXISTS alerts (
+            id TEXT PRIMARY KEY,
+            type TEXT,
+            message TEXT,
+            person_name TEXT,
+            gate TEXT,
+            timestamp TEXT,
             resolved INTEGER DEFAULT 0,
             resolved_by TEXT,
-            resolved_at TEXT,
-            note TEXT
+            severity TEXT DEFAULT 'medium',
+            description TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            title TEXT
         );
-
-        CREATE TABLE IF NOT EXISTS training_history (
+        CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_id TEXT UNIQUE,
-            model_type TEXT DEFAULT 'deep_face',
-            total_images INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'pending',
-            duration TEXT,
-            date TEXT DEFAULT (datetime('now', 'localtime')),
-            metrics TEXT
+            user_id TEXT,
+            title TEXT,
+            body TEXT,
+            type TEXT DEFAULT 'info',
+            is_read INTEGER DEFAULT 0,
+            data TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
-
         CREATE TABLE IF NOT EXISTS camera_devices (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
-            location TEXT DEFAULT '',
+            url TEXT,
             status TEXT DEFAULT 'online',
-            stream_url TEXT DEFAULT '',
+            last_ping TEXT,
+            location TEXT,
+            stream_url TEXT,
             detection_count INTEGER DEFAULT 0,
             last_activity TEXT
         );
-
-        CREATE TABLE IF NOT EXISTS notifications (
+        CREATE TABLE IF NOT EXISTS ai_training (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            title TEXT NOT NULL,
-            body TEXT NOT NULL,
-            type TEXT DEFAULT 'info',
-            is_read INTEGER DEFAULT 0,
-            timestamp TEXT DEFAULT (datetime('now', 'localtime')),
-            data TEXT DEFAULT '{}'
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
-
-        CREATE TABLE IF NOT EXISTS password_reset_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            token TEXT NOT NULL,
-            code TEXT NOT NULL,
-            expiry TEXT NOT NULL,
-            used INTEGER DEFAULT 0,
-            verified INTEGER DEFAULT 0,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+        CREATE TABLE IF NOT EXISTS training_sessions (
+            id TEXT PRIMARY KEY,
+            started_at TEXT,
+            completed_at TEXT,
+            total_images INTEGER,
+            total_persons INTEGER,
+            status TEXT,
+            model_type TEXT,
+            accuracy REAL,
+            notes TEXT
         );
-
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
         ''')
 
-        # Seed admin user
-        admin_pass = hashlib.sha256('admin123'.encode()).hexdigest()
-        cur.execute('''INSERT OR IGNORE INTO users (username, email, password_hash, role, status, full_name)
-                       VALUES (?, ?, ?, ?, ?, ?)''',
-                    ('admin', 'admin@sentinel.pro', admin_pass, 'admin', 'active', 'System Administrator'))
+        # Fix for missing columns in existing database
+        # camera_devices
+        for col_name in ["location", "last_activity", "stream_url", "last_ping", "detection_count"]:
+            try:
+                cur.execute(f"ALTER TABLE camera_devices ADD COLUMN {col_name} TEXT")
+            except sqlite3.OperationalError:
+                pass # Column already exists
+
+        # face_records
+        for col_name in ["person_name", "access_level", "image_paths", "match_count"]:
+            try:
+                if col_name == "match_count":
+                    cur.execute(f"ALTER TABLE face_records ADD COLUMN {col_name} INTEGER DEFAULT 0")
+                else:
+                    cur.execute(f"ALTER TABLE face_records ADD COLUMN {col_name} TEXT")
+            except sqlite3.OperationalError:
+                pass # Column already exists
+
+        # entry_logs
+        for col_name in ["admin_override", "overridden_by", "override_by", "detection_method"]:
+            try:
+                cur.execute(f"ALTER TABLE entry_logs ADD COLUMN {col_name} TEXT")
+            except sqlite3.OperationalError:
+                pass # Column already exists
+
+        # Create admin if not exists
+        pw_hash = hash_password('admin123')
+        cur.execute("SELECT id FROM users WHERE username='admin'")
+        if not cur.fetchone():
+            cur.execute("""INSERT INTO users (id, username, email, password_hash, role, status, approved, full_name)
+                           VALUES (?,?,?,?,?,?,?,?)""",
+                        ('1', 'admin', 'admin@sentinelpro.ai', pw_hash, 'admin', 'active', 1, 'System Administrator'))
+
+        db.commit()
+        # Removed premature db.close() and broken duplicate admin insert
 
         # Seed demo cameras
         cur.execute("INSERT OR IGNORE INTO camera_devices (id, name, location, status, stream_url) VALUES (?,?,?,?,?)",
@@ -608,9 +651,10 @@ def log_entry(person_name, person_id, status, confidence, image_path=None, camer
 
     # 2. Database Logging (Using 24-hour Railway Time)
     try:
-        db.execute('''INSERT INTO entry_logs (person_name, person_id, status, confidence, image_path, camera_id, entry_point, alert_triggered, timestamp)
-                      VALUES (?,?,?,?,?,?,?,?,?)''',
-                   (person_name, person_id, status, confidence, final_filename, camera_id, entry_point,
+        log_id = str(uuid.uuid4())
+        db.execute('''INSERT INTO entry_logs (id, person_name, person_id, status, confidence, image_path, camera_id, entry_point, alert_triggered, timestamp)
+                      VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                   (log_id, person_name, person_id, status, confidence, final_filename, camera_id, entry_point,
                     1 if not status.lower() == 'authorized' else 0, current_ts))
 
         msg = f"{person_name} detected at {entry_point} [{ts_railway}]"
@@ -657,23 +701,31 @@ def auth_login():
         return jsonify({'success': False, 'message': 'Username/Email and password required'}), 400
 
     db = get_db()
-    # Case-insensitive search for username or email using LOWER()
+    # 1. First find the user record
     try:
-        user = db.execute("SELECT * FROM users WHERE (LOWER(username)=LOWER(?) OR LOWER(email)=LOWER(?)) AND password_hash=?",
-                          (identifier, identifier, hash_password(password))).fetchone()
+        user = db.execute("SELECT * FROM users WHERE LOWER(username)=LOWER(?) OR LOWER(email)=LOWER(?)",
+                          (identifier, identifier)).fetchone()
     except sqlite3.Error as e:
-        print(f"❌ [DATABASE ERROR] during login: {e}")
+        print(f"❌ [DATABASE ERROR] during login search: {e}")
         return jsonify({'success': False, 'message': 'Internal Server Error (DB)'}), 500
 
     if not user:
-        print(f"❌ [LOGIN FAILED] Invalid credentials for: {identifier}")
+        print(f"❌ [LOGIN FAILED] User not found: '{identifier}'")
         return jsonify({'success': False, 'message': 'Wrong Credits'}), 401
 
-    print(f"✅ [LOGIN SUCCESS] User: {user['username']}, Role: {user['role']}")
+    # 2. Check password hash
+    input_hash = hash_password(password)
+    if user['password_hash'] != input_hash:
+        print(f"❌ [LOGIN FAILED] Hash mismatch for '{identifier}'. User status is '{user['status']}'")
+        return jsonify({'success': False, 'message': 'Wrong Credits'}), 401
+
+    print(f"✅ [LOGIN SUCCESS] User: '{user['username']}', Status: '{user['status']}', Role: '{user['role']}'")
     if user['status'] == 'pending':
+        print(f"⚠️ [LOGIN BLOCKED] User '{user['username']}' is still PENDING")
         return jsonify({'success': False, 'message': 'Account pending admin approval'}), 403
-    if user['status'] == 'disabled':
-        return jsonify({'success': False, 'message': 'Account has been disabled'}), 403
+    if user['status'] == 'disabled' or user['status'] == 'rejected':
+        return jsonify({'success': False, 'message': f'Account has been {user["status"]}'}), 403
+
     db.execute("UPDATE users SET last_login=datetime('now', 'localtime'), is_online=1 WHERE id=?", (user['id'],))
     db.commit()
     token = generate_token(user['id'], user['role'])
@@ -702,9 +754,11 @@ def auth_register():
                           (data['username'], data['email'])).fetchone()
     if existing:
         return jsonify({'success': False, 'message': 'Username or email already exists'}), 400
-    db.execute('''INSERT INTO users (username, email, password_hash, role, status, full_name, phone, department)
-                  VALUES (?,?,?,?,?,?,?,?)''',
-               (data['username'], data['email'], hash_password(data['password']),
+
+    user_id = str(uuid.uuid4())
+    db.execute('''INSERT INTO users (id, username, email, password_hash, role, status, full_name, phone, department)
+                  VALUES (?,?,?,?,?,?,?,?,?)''',
+               (user_id, data['username'], data['email'], hash_password(data['password']),
                 data.get('role', 'user'), 'pending',
                 data.get('full_name'), data.get('phone'), data.get('department')))
     # Add notification for admins
@@ -828,26 +882,36 @@ def reset_password():
 
     return jsonify({'success': True, 'message': 'Password reset successful'})
 
-# DASHBOARD
+# ─── CACHING LAYER FOR PERFORMANCE (TC-API FIX) ───────────────────────────
+_stats_cache = {'data': None, 'expiry': datetime.now()}
+
 @app.route('/api/dashboard/stats', methods=['GET'])
 @app.route('/api/stats', methods=['GET'])
 @login_required
 def dashboard_stats():
+    global _stats_cache
+    if _stats_cache['data'] and _stats_cache['expiry'] > datetime.now():
+        return jsonify(_stats_cache['data'])
+
     db = get_db()
     today = datetime.now().strftime('%Y-%m-%d')
-    stats = {
-        'total_faces': db.execute("SELECT COUNT(*) FROM face_records WHERE status='active'").fetchone()[0],
-        'today_entries': db.execute("SELECT COUNT(*) FROM entry_logs WHERE date(timestamp)=?", (today,)).fetchone()[0],
-        'unauthorized_today': db.execute("SELECT COUNT(*) FROM entry_logs WHERE status='unauthorized' AND date(timestamp)=?", (today,)).fetchone()[0],
-        'active_alerts': db.execute("SELECT COUNT(*) FROM security_alerts WHERE resolved=0").fetchone()[0],
-        'pending_approvals': db.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0],
-        'online_cameras': db.execute("SELECT COUNT(*) FROM camera_devices WHERE status='online'").fetchone()[0],
-        'recognition_accuracy': 96.8,
-        'hourly_data': [{'hour': i*2, 'count': max(0, 10-abs(i-6)*2)} for i in range(12)],
-        'weekly_data': [{'day': i, 'authorized': i*4+2, 'unauthorized': i%3} for i in range(7)],
-        'recent_entries': [row_to_dict(r) for r in db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC LIMIT 10").fetchall()],
-    }
-    return jsonify(stats)
+    try:
+        stats = {
+            'total_faces': db.execute("SELECT COUNT(*) FROM face_records WHERE status='active'").fetchone()[0],
+            'today_entries': db.execute("SELECT COUNT(*) FROM entry_logs WHERE date(timestamp)=?", (today,)).fetchone()[0],
+            'unauthorized_today': db.execute("SELECT COUNT(*) FROM entry_logs WHERE status='unauthorized' AND date(timestamp)=?", (today,)).fetchone()[0],
+            'active_alerts': db.execute("SELECT COUNT(*) FROM alerts WHERE resolved=0").fetchone()[0],
+            'pending_approvals': db.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0],
+            'online_cameras': db.execute("SELECT COUNT(*) FROM camera_devices WHERE status='online'").fetchone()[0],
+            'recognition_accuracy': 96.8,
+            'hourly_data': [{'hour': i*2, 'count': max(0, 10-abs(i-6)*2)} for i in range(12)],
+            'weekly_data': [{'day': i, 'authorized': i*4+2, 'unauthorized': i%3} for i in range(7)],
+            'recent_entries': [row_to_dict(r) for r in db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC LIMIT 10").fetchall()],
+        }
+        _stats_cache = {'data': stats, 'expiry': datetime.now() + timedelta(seconds=10)}
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'error': 'Database Load Error', 'detail': str(e)}), 500
 
 def get_dir_size(path):
     total = 0
@@ -983,29 +1047,21 @@ def recognize_batch():
 
 def _generate_forensic_blueprint(frame_bgr):
     """Generate a high-tech pencil sketch / blueprint version of the frame."""
+    if frame_bgr is None: return None
     try:
-        # Convert to grayscale
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-
-        # Gaussian blur to reduce noise
-        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+        # Optimization: Resize for faster blueprinting during heavy load
+        h, w = frame_bgr.shape[:2]
+        small_frame = cv2.resize(frame_bgr, (640, int(h * (640.0 / w))))
 
         # Pencil Sketch effect
-        # dst_gray is the one we want (grayscale pencil sketch)
-        dst_gray, _ = cv2.pencilSketch(frame_bgr, sigma_s=60, sigma_r=0.07, shade_factor=0.05)
-
-        # Invert to make it look like a white-on-dark blueprint or keep as high-contrast sketch
-        # Let's go with a cool high-contrast sketch
+        dst_gray, _ = cv2.pencilSketch(small_frame, sigma_s=60, sigma_r=0.07, shade_factor=0.05)
         blueprint = cv2.cvtColor(dst_gray, cv2.COLOR_GRAY2BGR)
 
-        # Add a subtle cyan tint for that "Blueprint" feel
-        cyan_tint = np.full(blueprint.shape, (255, 200, 0), dtype=np.uint8) # BGR: Cyan
-        blueprint = cv2.addWeighted(blueprint, 0.8, cyan_tint, 0.2, 0)
-
+        # Performance: Scale back if needed, or keep small for vault storage efficiency
         return blueprint
     except Exception as e:
-        print(f"⚠️ Blueprint Generation Error: {e}")
-        return frame_bgr # Fallback to original if processing fails
+        print(f"⚠️ Blueprint Engine Error: {e}")
+        return frame_bgr # Fallback to original to prevent capture failure
 
 @app.route('/api/recognize/frame', methods=['POST'])
 @login_required
@@ -1281,7 +1337,7 @@ def override_log(log_id):
 @login_required
 def get_alerts():
     db = get_db()
-    rows = db.execute("SELECT * FROM security_alerts ORDER BY timestamp DESC").fetchall()
+    rows = db.execute("SELECT * FROM alerts ORDER BY timestamp DESC").fetchall()
     return jsonify({'alerts': [row_to_dict(r) for r in rows]})
 
 @app.route('/api/alerts/<int:alert_id>/resolve', methods=['POST'])
@@ -1289,7 +1345,7 @@ def get_alerts():
 def resolve_alert(alert_id):
     data = request.get_json()
     db = get_db()
-    db.execute("UPDATE security_alerts SET resolved=1, resolved_by=?, resolved_at=datetime('now', 'localtime'), note=? WHERE id=?",
+    db.execute("UPDATE alerts SET resolved=1, resolved_by=?, resolved_at=datetime('now', 'localtime'), note=? WHERE id=?",
                (str(g.user_id), data.get('note'), alert_id))
     db.commit()
     return jsonify({'success': True})
@@ -1309,11 +1365,11 @@ def get_users():
         u.pop('password_hash', None)
     return jsonify({'users': users})
 
-@app.route('/api/users/<int:user_id>/approve', methods=['POST'])
+@app.route('/api/users/<string:user_id>/approve', methods=['POST'])
 @admin_required
 def approve_user(user_id):
     db = get_db()
-    db.execute("UPDATE users SET status='active' WHERE id=?", (user_id,))
+    db.execute("UPDATE users SET status='active', approved=1 WHERE id=?", (user_id,))
 
     # Notify the user
     try:
@@ -1325,12 +1381,12 @@ def approve_user(user_id):
     db.commit()
     return jsonify({'success': True})
 
-@app.route('/api/users/<int:user_id>/reject', methods=['POST'])
+@app.route('/api/users/<string:user_id>/reject', methods=['POST'])
 @admin_required
 def reject_user(user_id):
     data = request.get_json()
     db = get_db()
-    db.execute("UPDATE users SET status='rejected' WHERE id=?", (user_id,))
+    db.execute("UPDATE users SET status='rejected', approved=0 WHERE id=?", (user_id,))
     db.commit()
     return jsonify({'success': True})
 
@@ -1374,7 +1430,7 @@ def update_profile():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/users/<int:user_id>/status', methods=['POST'])
+@app.route('/api/users/<string:user_id>/status', methods=['POST'])
 @admin_required
 def set_user_status(user_id):
     data = request.get_json()
@@ -1404,7 +1460,7 @@ def set_user_status(user_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@app.route('/api/users/<string:user_id>', methods=['DELETE'])
 @admin_required
 def delete_user(user_id):
     db = get_db()

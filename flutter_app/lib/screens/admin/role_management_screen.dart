@@ -90,6 +90,7 @@ class _RoleManagementScreenState extends State<RoleManagementScreen> {
 
   Widget _buildUserRoleCard(dynamic user, UserManagementProvider provider) {
     final bool isAdmin = user.role == 'admin';
+    final bool isDisabled = user.status == 'disabled';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -105,20 +106,34 @@ class _RoleManagementScreenState extends State<RoleManagementScreen> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: AppTheme.accentPurpleLight,
-                child: Text(user.username[0].toUpperCase(), style: const TextStyle(color: AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
+                backgroundColor: isDisabled ? Colors.grey[300] : AppTheme.accentPurpleLight,
+                child: Text(user.username[0].toUpperCase(), style: TextStyle(color: isDisabled ? Colors.grey : AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user.fullName ?? user.username, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text(
+                      user.fullName ?? user.username, 
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        fontSize: 15,
+                        decoration: isDisabled ? TextDecoration.lineThrough : null,
+                      )
+                    ),
                     Text(user.email, style: const TextStyle(color: AppTheme.textLight, fontSize: 12)),
                   ],
                 ),
               ),
-              _roleBadge(user.role),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _roleBadge(user.role),
+                  const SizedBox(height: 4),
+                  _statusBadge(user.status),
+                ],
+              ),
             ],
           ),
           const Divider(height: 32),
@@ -135,17 +150,77 @@ class _RoleManagementScreenState extends State<RoleManagementScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Row(
             children: [
-              _permissionIcon(Icons.videocam_rounded, isAdmin),
-              _permissionIcon(Icons.analytics_rounded, isAdmin),
-              _permissionIcon(Icons.admin_panel_settings_rounded, isAdmin),
-              _permissionIcon(Icons.delete_forever_rounded, isAdmin),
+              // Disable/Enable Action
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    provider.toggleStatus(user.id!, isDisabled ? 'active' : 'disabled');
+                  },
+                  icon: Icon(isDisabled ? Icons.check_circle_outline_rounded : Icons.block_flipped, size: 16),
+                  label: Text(isDisabled ? 'Enable' : 'Disable', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isDisabled ? Colors.green : Colors.orange,
+                    side: BorderSide(color: isDisabled ? Colors.green : Colors.orange),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Delete Action
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    _showDeleteConfirm(context, user, provider);
+                  },
+                  icon: const Icon(Icons.delete_forever_rounded, size: 16),
+                  label: const Text('Delete', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  void _showDeleteConfirm(BuildContext context, dynamic user, UserManagementProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: Text('Are you sure you want to permanently delete ${user.username}? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              provider.deleteUser(user.id!);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('User ${user.username} deleted')));
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusBadge(String status) {
+    final color = status == 'active' ? Colors.green : (status == 'disabled' ? Colors.grey : Colors.orange);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+      child: Text(status.toUpperCase(), style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold)),
     );
   }
 

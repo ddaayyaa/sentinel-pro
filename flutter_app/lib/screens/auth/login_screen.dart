@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../providers/providers.dart';
@@ -22,7 +22,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _rememberMe = false;
-  final LocalAuthentication _auth = LocalAuthentication();
   final _storage = const FlutterSecureStorage();
 
   @override
@@ -106,38 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return;
   }
 
-  Future<void> _handleBiometric() async {
-    try {
-      final bool canAuthenticateWithBiometrics = await _auth.canCheckBiometrics;
-      final bool canAuthenticate = canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
-
-      if (!canAuthenticate) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Biometrics not available')));
-        return;
-      }
-
-      final bool didAuthenticate = await _auth.authenticate(
-          localizedReason: 'Please authenticate to sign in to Sentinel Pro',
-          options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true));
-
-      if (didAuthenticate) {
-        final email = await _storage.read(key: 'saved_email');
-        final pass = await _storage.read(key: 'saved_password');
-        if (email != null && pass != null) {
-          _emailController.text = email;
-          _passwordController.text = pass;
-          _handleLogin();
-        } else {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No saved credentials for biometric login')));
-        }
-      }
-    } catch (e) {
-      debugPrint('Biometric Error: $e');
-    }
-  }
-
   void _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -147,6 +114,17 @@ class _LoginScreenState extends State<LoginScreen> {
         const SnackBar(content: Text('Please enter all credentials')),
       );
       return;
+    }
+
+    // Email validation: If it looks like an email, check format
+    if (email.contains('@')) {
+      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+      if (!emailRegex.hasMatch(email)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a valid email address')),
+        );
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -267,6 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _emailController,
+                inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
                 decoration: InputDecoration(
                   hintText: 'Username or Email',
                   hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
@@ -284,6 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: true,
+                inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
                 decoration: InputDecoration(
                   hintText: 'Enter Password',
                   hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
@@ -324,37 +304,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), gradient: const LinearGradient(colors: [Color(0xFF7B61FF), Color(0xFF9E8AFF)])),
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, minimumSize: const Size(double.infinity, 56)),
-                        child: _isLoading 
-                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('AUTHORIZE ACCESS'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    height: 56,
-                    width: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.fingerprint, color: AppTheme.primaryPurple, size: 32),
-                      onPressed: _handleBiometric,
-                      tooltip: 'Biometric Login',
-                    ),
-                  ),
-                ],
+              Container(
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), gradient: const LinearGradient(colors: [Color(0xFF7B61FF), Color(0xFF9E8AFF)])),
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _handleLogin,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, minimumSize: const Size(double.infinity, 56)),
+                  child: _isLoading 
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('AUTHORIZE ACCESS'),
+                ),
               ),
               const SizedBox(height: 32),
               Row(

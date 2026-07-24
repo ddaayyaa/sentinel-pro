@@ -333,7 +333,7 @@ class FaceProvider extends ChangeNotifier {
     loadFaces(refresh: true);
   }
 
-  Future<bool> deleteFace(int id) async {
+  Future<bool> deleteFace(dynamic id) async {
     final result = await _api.deleteFace(id);
     if (result) {
       _faces.removeWhere((f) => f.id == id);
@@ -342,7 +342,7 @@ class FaceProvider extends ChangeNotifier {
     return result;
   }
 
-  Future<bool> toggleStatus(int id, String status) async {
+  Future<bool> toggleStatus(dynamic id, String status) async {
     final result = await _api.toggleFaceStatus(id, status);
     if (result) {
       final idx = _faces.indexWhere((f) => f.id == id);
@@ -435,7 +435,7 @@ class EntryLogProvider extends ChangeNotifier {
     loadLogs(refresh: true);
   }
 
-  Future<bool> overrideLog(int id, String decision) async {
+  Future<bool> overrideLog(dynamic id, String decision) async {
     final result = await _api.overrideEntry(id, decision, 'Admin Override via Mobile');
     if (result) {
       await loadLogs(refresh: true);
@@ -464,7 +464,7 @@ class AlertProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> resolveAlert(int id, String? note) async {
+  Future<bool> resolveAlert(dynamic id, String? note) async {
     final result = await _api.resolveAlert(id, note);
     if (result) await loadAlerts();
     return result;
@@ -491,7 +491,7 @@ class UserManagementProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> setRole(int id, String role) async {
+  Future<bool> setRole(dynamic id, String role) async {
     try {
       final response = await _api.updateUserStatus(id, role: role);
       if (response) await loadUsers();
@@ -501,21 +501,36 @@ class UserManagementProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> approveUser(int id) async {
+  Future<bool> approveUser(dynamic id) async {
     final result = await _api.approveUser(id);
-    if (result) await loadUsers();
+    if (result) {
+      _users.removeWhere((u) => u.id == id); // Remove from local list immediately
+      notifyListeners();
+    }
     return result;
   }
 
-  Future<bool> rejectUser(int id, String? reason) async {
+  Future<bool> rejectUser(dynamic id, String? reason) async {
     final result = await _api.rejectUser(id, reason);
-    if (result) await loadUsers();
+    if (result) {
+      _users.removeWhere((u) => u.id == id); // Remove from local list immediately
+      notifyListeners();
+    }
     return result;
   }
 
-  Future<bool> toggleStatus(int id, String status) async {
+  Future<bool> toggleStatus(dynamic id, String status) async {
     final result = await _api.updateUserStatus(id, status: status);
     if (result) await loadUsers();
+    return result;
+  }
+
+  Future<bool> deleteUser(dynamic id) async {
+    final result = await _api.deleteUser(id);
+    if (result) {
+      _users.removeWhere((u) => u.id == id);
+      notifyListeners();
+    }
     return result;
   }
 }
@@ -729,7 +744,7 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> markRead(int id) async {
+  Future<void> markRead(dynamic id) async {
     await _api.markNotificationRead(id);
     final idx = _notifications.indexWhere((n) => n.id == id);
     if (idx != -1) notifyListeners();

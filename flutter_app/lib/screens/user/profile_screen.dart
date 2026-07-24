@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../theme/app_theme.dart';
@@ -42,7 +43,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
-              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Phone Number')),
+              TextField(
+                controller: phoneCtrl, 
+                decoration: const InputDecoration(labelText: 'Phone Number'),
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
               TextField(controller: deptCtrl, decoration: const InputDecoration(labelText: 'Department')),
             ],
           ),
@@ -51,9 +57,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
+              final phone = phoneCtrl.text.trim();
+              final phoneRegex = RegExp(r'^\d{10}$');
+              if (!phoneRegex.hasMatch(phone)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Give correct phone format')),
+                );
+                return;
+              }
+
               final success = await auth.updateProfile({
                 'full_name': nameCtrl.text.trim(),
-                'phone': phoneCtrl.text.trim(),
+                'phone': phone,
                 'department': deptCtrl.text.trim(),
               });
               if (mounted) {
