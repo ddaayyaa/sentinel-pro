@@ -9,6 +9,7 @@ fpdf==1.7.2
 python-docx==1.1.0
 uvicorn>=0.20.0
 gunicorn>=21.2.0
+opencv-python-headless
 
 # ─── Install these separately (heavy) ───────────────────
 # pip install face-recognition         (requires cmake & dlib)
