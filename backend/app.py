@@ -203,12 +203,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # ─── Config ───────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Cross-platform Shared DB logic
-if platform.system() == 'Windows':
-    SHARED_DB_DIR = r'C:\Users\ydaya\Downloads'
-else:
-    SHARED_DB_DIR = BASE_DIR
-
+SHARED_DB_DIR = r'C:\Users\ydaya\Downloads'
 app.config.update(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'sentinel_pro_secret_2024_secure'),
     JWT_SECRET=os.environ.get('JWT_SECRET', 'sentinel_jwt_secret_2024'),
@@ -725,9 +720,11 @@ def auth_login():
         return jsonify({'success': False, 'message': 'Wrong Credits'}), 401
 
     print(f"✅ [LOGIN SUCCESS] User: '{user['username']}', Status: '{user['status']}', Role: '{user['role']}'")
-    if user['status'] == 'pending':
+    # Unified Approval Sync: Allow login if status is active OR approved flag is 1
+    if user['status'] == 'pending' and user['approved'] == 0:
         print(f"⚠️ [LOGIN BLOCKED] User '{user['username']}' is still PENDING")
         return jsonify({'success': False, 'message': 'Account pending admin approval'}), 403
+
     if user['status'] == 'disabled' or user['status'] == 'rejected':
         return jsonify({'success': False, 'message': f'Account has been {user["status"]}'}), 403
 
@@ -895,27 +892,60 @@ _stats_cache = {'data': None, 'expiry': datetime.now()}
 @login_required
 def dashboard_stats():
     global _stats_cache
-    if _stats_cache['data'] and _stats_cache['expiry'] > datetime.now():
+    # For regular users, we don't cache broadly as data is personalized
+    # But for admin, we can still use the cache
+    if g.user_role == 'admin' and _stats_cache['data'] and _stats_cache['expiry'] > datetime.now():
         return jsonify(_stats_cache['data'])
 
     db = get_db()
     today = datetime.now().strftime('%Y-%m-%d')
+
+    # Get Current User Info for Isolation
+    user = db.execute("SELECT username, full_name, created_at FROM users WHERE id=?", (g.user_id,)).fetchone()
+    u_name = user['username'] if user else '___'
+    f_name = user['full_name'] if user else '___'
+    created_at = user['created_at'] if user else '2000-01-01 00:00:00'
+
     try:
+        # Base Queries for Filtering
+        log_filter = "WHERE 1=1"
+        log_params = []
+
+        if g.user_role != 'admin':
+            log_filter = "WHERE (person_name=? OR person_name=?) AND timestamp >= ?"
+            log_params = [u_name, f_name, created_at]
+
+        # 1. Real Hourly Data Calculation (Personalized)
+        hourly_data = []
+        for i in range(12):
+            hour_start = f"{str(i*2).zfill(2)}:00:00"
+            hour_end = f"{str(i*2+1).zfill(2)}:59:59"
+
+            h_query = f"SELECT COUNT(*) FROM entry_logs {log_filter} AND date(timestamp)=? AND time(timestamp) BETWEEN ? AND ?"
+            h_params = log_params + [today, hour_start, hour_end]
+
+            count = db.execute(h_query, h_params).fetchone()[0]
+            hourly_data.append({'hour': i*2, 'count': count})
+
         stats = {
-            'total_faces': db.execute("SELECT COUNT(*) FROM face_records WHERE status='active'").fetchone()[0],
-            'today_entries': db.execute("SELECT COUNT(*) FROM entry_logs WHERE date(timestamp)=?", (today,)).fetchone()[0],
-            'unauthorized_today': db.execute("SELECT COUNT(*) FROM entry_logs WHERE status='unauthorized' AND date(timestamp)=?", (today,)).fetchone()[0],
-            'active_alerts': db.execute("SELECT COUNT(*) FROM alerts WHERE resolved=0").fetchone()[0],
-            'pending_approvals': db.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0],
+            'total_faces': db.execute("SELECT COUNT(*) FROM face_records WHERE status='active'").fetchone()[0] if g.user_role == 'admin' else 1,
+            'today_entries': db.execute(f"SELECT COUNT(*) FROM entry_logs {log_filter} AND date(timestamp)=?", log_params + [today]).fetchone()[0],
+            'unauthorized_today': db.execute(f"SELECT COUNT(*) FROM entry_logs {log_filter} AND status='unauthorized' AND date(timestamp)=?", log_params + [today]).fetchone()[0],
+            'active_alerts': db.execute("SELECT COUNT(*) FROM alerts WHERE resolved=0").fetchone()[0] if g.user_role == 'admin' else 0,
+            'pending_approvals': db.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0] if g.user_role == 'admin' else 0,
             'online_cameras': db.execute("SELECT COUNT(*) FROM camera_devices WHERE status='online'").fetchone()[0],
             'recognition_accuracy': 96.8,
-            'hourly_data': [{'hour': i*2, 'count': max(0, 10-abs(i-6)*2)} for i in range(12)],
+            'hourly_data': hourly_data,
             'weekly_data': [{'day': i, 'authorized': i*4+2, 'unauthorized': i%3} for i in range(7)],
-            'recent_entries': [row_to_dict(r) for r in db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC LIMIT 10").fetchall()],
+            'recent_entries': [row_to_dict(r) for r in db.execute(f"SELECT * FROM entry_logs {log_filter} ORDER BY timestamp DESC LIMIT 10", log_params).fetchall()],
         }
-        _stats_cache = {'data': stats, 'expiry': datetime.now() + timedelta(seconds=10)}
+
+        if g.user_role == 'admin':
+            _stats_cache = {'data': stats, 'expiry': datetime.now() + timedelta(seconds=10)}
+
         return jsonify(stats)
     except Exception as e:
+        print(f"❌ [STATS ERROR] {e}")
         return jsonify({'error': 'Database Load Error', 'detail': str(e)}), 500
 
 def get_dir_size(path):
@@ -1316,15 +1346,38 @@ def get_logs():
     date_to = request.args.get('date_to')
     offset = (page - 1) * limit
     db = get_db()
-    query = "SELECT * FROM entry_logs WHERE 1=1"
+
+    # Isolation Logic
+    query_parts = ["WHERE 1=1"]
     params = []
-    if status: query += " AND status=?"; params.append(status)
-    if date_from: query += " AND date(timestamp)>=?"; params.append(date_from)
-    if date_to: query += " AND date(timestamp)<=?"; params.append(date_to)
-    total = db.execute(f"SELECT COUNT(*) FROM entry_logs WHERE 1=1" + query[query.index(' AND'):] if ' AND' in query else "SELECT COUNT(*) FROM entry_logs", params).fetchone()[0]
-    query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+
+    if g.user_role != 'admin':
+        user = db.execute("SELECT username, full_name, created_at FROM users WHERE id=?", (g.user_id,)).fetchone()
+        u_name = user['username'] if user else '___'
+        f_name = user['full_name'] if user else '___'
+        created_at = user['created_at'] if user else '2000-01-01 00:00:00'
+
+        query_parts.append("(person_name=? OR person_name=?) AND timestamp >= ?")
+        params.extend([u_name, f_name, created_at])
+
+    if status:
+        query_parts.append("status=?")
+        params.append(status)
+    if date_from:
+        query_parts.append("date(timestamp)>=?")
+        params.append(date_from)
+    if date_to:
+        query_parts.append("date(timestamp)<=?")
+        params.append(date_to)
+
+    base_query = " ".join([query_parts[0]] + ["AND " + p for p in query_parts[1:]])
+
+    total = db.execute(f"SELECT COUNT(*) FROM entry_logs {base_query}", params).fetchone()[0]
+
+    final_query = f"SELECT * FROM entry_logs {base_query} ORDER BY timestamp DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
-    rows = db.execute(query, params).fetchall()
+
+    rows = db.execute(final_query, params).fetchall()
     return jsonify({'logs': [row_to_dict(r) for r in rows], 'total': total})
 
 @app.route('/api/logs/<int:log_id>/override', methods=['POST'])
@@ -1606,75 +1659,76 @@ def export_logs_pdf():
         return jsonify({'error': 'PDF library not available'}), 500
 
     db = get_db()
-    rows = db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC").fetchall()
+    rows = db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC LIMIT 1000").fetchall()
 
-    pdf = FPDF()
+    class PDF(FPDF):
+        def header(self):
+            self.set_font('helvetica', 'B', 15)
+            self.cell(0, 10, 'SENTINEL PRO SECURITY AUDIT REPORT', border=False, align='C')
+            self.ln(15)
+
+    pdf = PDF()
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(190, 10, "Sentinel Pro - Entry Logs Report", 0, 1, 'C')
-    pdf.ln(10)
+    pdf.set_font("helvetica", 'B', 10)
 
-    pdf.set_font("Arial", 'B', 10)
-    col_widths = [10, 40, 30, 30, 40, 40]
-    headers = ['ID', 'Name', 'Status', 'Confidence', 'Camera', 'Timestamp']
-
-    for i, h in enumerate(headers):
-        pdf.cell(col_widths[i], 10, h, 1)
+    # Headers
+    cols = [('Name', 40), ('Status', 30), ('Confidence', 25), ('Camera', 35), ('Timestamp', 60)]
+    for h, w in cols:
+        pdf.cell(w, 10, h, 1, align='C')
     pdf.ln()
 
-    pdf.set_font("Arial", '', 9)
+    pdf.set_font("helvetica", '', 9)
     for r in rows:
-        pdf.cell(col_widths[0], 10, str(r['id']), 1)
-        pdf.cell(col_widths[1], 10, str(r['person_name']), 1)
-        pdf.cell(col_widths[2], 10, str(r['status']), 1)
-        pdf.cell(col_widths[3], 10, f"{float(r['confidence']):.2f}", 1)
-        pdf.cell(col_widths[4], 10, str(r['camera_id']), 1)
-        pdf.cell(col_widths[5], 10, str(r['timestamp']), 1)
+        pdf.cell(40, 10, str(r['person_name'] or 'Unknown')[:20], 1)
+        pdf.cell(30, 10, str(r['status']).upper(), 1)
+        pdf.cell(25, 10, f"{float(r['confidence'] or 0):.1f}%", 1)
+        pdf.cell(35, 10, str(r['camera_id'] or 'CAM-01'), 1)
+        pdf.cell(60, 10, str(r['timestamp']), 1)
         pdf.ln()
 
-    output = pdf.output(dest='S').encode('latin-1')
     import io
-    mem = io.BytesIO(output)
-    return send_file(mem, mimetype='application/pdf', as_attachment=True, download_name=f"entry_logs_{datetime.now().strftime('%Y%m%d')}.pdf")
+    # fpdf2 output() returns bytes by default if no filename given
+    out_bytes = pdf.output()
+    return send_file(io.BytesIO(out_bytes), mimetype='application/pdf', as_attachment=True, download_name=f"security_report_{datetime.now().strftime('%Y%m%d')}.pdf")
 
 @app.route('/api/admin/export-logs-word', methods=['GET'])
 @admin_required
 def export_logs_word():
     try:
         from docx import Document
+        from docx.shared import Inches
     except ImportError:
         return jsonify({'error': 'Word library not available'}), 500
 
     db = get_db()
-    rows = db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC").fetchall()
+    rows = db.execute("SELECT * FROM entry_logs ORDER BY timestamp DESC LIMIT 1000").fetchall()
 
     doc = Document()
-    doc.add_heading('Sentinel Pro - Entry Logs Report', 0)
+    doc.add_heading('Sentinel Pro - Security Logs', 0)
 
-    table = doc.add_table(rows=1, cols=6)
+    table = doc.add_table(rows=1, cols=5)
+    table.style = 'Table Grid'
     hdr_cells = table.rows[0].cells
-    hdr_cells[0].text = 'ID'
-    hdr_cells[1].text = 'Name'
-    hdr_cells[2].text = 'Status'
-    hdr_cells[3].text = 'Confidence'
-    hdr_cells[4].text = 'Camera'
-    hdr_cells[5].text = 'Timestamp'
+    hdr_cells[0].text = 'Identity'
+    hdr_cells[1].text = 'Status'
+    hdr_cells[2].text = 'Confidence'
+    hdr_cells[3].text = 'Node'
+    hdr_cells[4].text = 'Timestamp'
 
     for r in rows:
         row_cells = table.add_row().cells
-        row_cells[0].text = str(r['id'])
-        row_cells[1].text = str(r['person_name'])
-        row_cells[2].text = str(r['status'])
-        row_cells[3].text = f"{float(r['confidence']):.2f}"
-        row_cells[4].text = str(r['camera_id'])
-        row_cells[5].text = str(r['timestamp'])
+        row_cells[0].text = str(r['person_name'] or 'Unknown')
+        row_cells[1].text = str(r['status']).upper()
+        row_cells[2].text = f"{float(r['confidence'] or 0):.1f}%"
+        row_cells[3].text = str(r['camera_id'] or 'CAM-01')
+        row_cells[4].text = str(r['timestamp'])
 
     import io
     mem = io.BytesIO()
     doc.save(mem)
     mem.seek(0)
     return send_file(mem, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                     as_attachment=True, download_name=f"entry_logs_{datetime.now().strftime('%Y%m%d')}.docx")
+                     as_attachment=True, download_name=f"security_report_{datetime.now().strftime('%Y%m%d')}.docx")
 
 @app.route('/api/admin/export-logs', methods=['GET'])
 @admin_required
