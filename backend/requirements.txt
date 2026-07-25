@@ -7,12 +7,12 @@ numpy==1.26.4
 requests==2.31.0
 fpdf==1.7.2
 python-docx==1.1.0
-uvicorn>=0.20.0
 gunicorn>=21.2.0
 opencv-python-headless
 psutil
 face_recognition
 deepface
+tf-keras
 
 # ─── Install these separately (heavy) ───────────────────
 # pip install face-recognition         (requires cmake & dlib)
