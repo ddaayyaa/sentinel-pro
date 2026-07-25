@@ -295,7 +295,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       children: [
         Container(
           width: 24,
-          height: 140 * heightFactor,
+          height: (120 * heightFactor).clamp(4.0, 120.0), // Reduced base height from 140 to 120
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -307,7 +307,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             borderRadius: BorderRadius.circular(6),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6), // Reduced from 8 to 6
         Text(label, style: const TextStyle(fontSize: 8, color: AppTheme.textLight, fontWeight: FontWeight.bold)),
       ],
     );
