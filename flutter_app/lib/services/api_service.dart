@@ -35,9 +35,9 @@ class ApiService {
       _cachedToken = await _storage.read(key: _tokenKey);
       final savedUrl = _prefs.getString(_baseUrlKey);
       
-      // FORCE SYNC: If saved URL is from an old network session, clear it
-      if (savedUrl != null && !savedUrl.contains('10.232.189.156')) {
-        debugPrint('🧹 Clearing stale saved URL: $savedUrl');
+      // FORCE CLOUD SYNC: If saved URL is an old local IP, clear it to use the new live Render URL
+      if (savedUrl != null && !savedUrl.contains('onrender.com')) {
+        debugPrint('☁️ Switching from local IP to Cloud URL: $savedUrl');
         await _prefs.remove(_baseUrlKey);
       }
 
