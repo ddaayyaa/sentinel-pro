@@ -7,6 +7,15 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   selenium-tests:
     name: "Selenium — Website Tests (300)"
@@ -165,6 +174,9 @@ jobs:
     name: "Compile Master Report & Deploy"
     needs: [selenium-tests, appium-tests, unit-tests, validation-tests, deployment-status, load-tests]
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -185,8 +197,20 @@ jobs:
           python selenium_model/audit_engine.py
           echo "Master Report Compiled Successfully!"
 
-      - name: Upload Master Audit Artifact
-        uses: actions/upload-artifact@v4
+      - name: Prepare HTML Site Artifact
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          cp -r selenium_model _site/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: master-compilation-report
-          path: selenium_model/
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
