@@ -203,7 +203,12 @@ CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # ─── Config ───────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SHARED_DB_DIR = r'C:\Users\ydaya\Downloads'
+# Cross-platform Shared DB logic
+if platform.system() == 'Windows':
+    SHARED_DB_DIR = r'C:\Users\ydaya\Downloads'
+else:
+    SHARED_DB_DIR = BASE_DIR
+
 app.config.update(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'sentinel_pro_secret_2024_secure'),
     JWT_SECRET=os.environ.get('JWT_SECRET', 'sentinel_jwt_secret_2024'),
