@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../theme/app_theme.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
@@ -20,6 +22,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
   double _downloadProgress = 0.0;
 
   Future<void> _handleDownload() async {
+    // 1. Request Permissions for Public Storage
+    if (Platform.isAndroid) {
+        var status = await Permission.manageExternalStorage.status;
+        if (!status.isGranted) {
+            status = await Permission.manageExternalStorage.request();
+        }
+        
+        // Fallback for older Android versions
+        if (!status.isGranted) {
+            await Permission.storage.request();
+        }
+    }
+
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0.1;
@@ -29,32 +44,52 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final notifications = NotificationService();
 
     try {
-      // 1. Fetch data from backend
+      // 2. Fetch data from backend
       final data = await api.exportLogs(_selectedFormat.toLowerCase());
       
       setState(() => _downloadProgress = 0.5);
 
       if (data != null) {
-        // 2. Save to device storage
-        final directory = await getApplicationDocumentsDirectory();
+        // 3. Resolve Public Downloads Directory
+        Directory? directory;
+        if (Platform.isAndroid) {
+          directory = Directory('/storage/emulated/0/Download');
+          if (!await directory.exists()) {
+             directory = await getExternalStorageDirectory();
+          }
+        } else {
+          directory = await getApplicationDocumentsDirectory();
+        }
+
         final fileName = 'sentinel_report_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.${_selectedFormat.toLowerCase()}';
-        final file = File('${directory.path}/$fileName');
+        final filePath = '${directory!.path}/$fileName';
+        final file = File(filePath);
         
-        // Convert dynamic data to bytes (Dio Response bytes are expected here)
-        await file.writeAsBytes(data as List<int>);
+        await file.writeAsBytes(data);
 
         setState(() => _downloadProgress = 1.0);
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Report saved: $fileName'), backgroundColor: Colors.green),
+            SnackBar(
+              content: Text('Report saved to Downloads: $fileName'), 
+              backgroundColor: Colors.green,
+              action: SnackBarAction(
+                label: 'OPEN',
+                textColor: Colors.white,
+                onPressed: () => OpenFilex.open(filePath),
+              ),
+            ),
           );
 
-          // 3. Trigger completion notification
+          // 4. Automatically Open File
+          await OpenFilex.open(filePath);
+
+          // 5. Trigger completion notification
           await notifications.showNotification(
             id: 99,
             title: 'Download Complete',
-            body: 'Your security report ($fileName) is ready for viewing.',
+            body: 'Report $fileName is ready in your Downloads folder.',
           );
         }
       } else {
